@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 2');
+          addDebugInfo('PayPal SDK loaded successfully phase 3');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -102,6 +102,15 @@ const ApplePayButton = () => {
         return;
       }
 
+      // Check if device can make payments with specific networks
+      const canMakePaymentsWithNetworks =
+        window.ApplePaySession.canMakePaymentsWithActiveCard(
+          'merchant.com.paypal',
+        );
+      addDebugInfo(
+        'Can make payments with networks: ' + canMakePaymentsWithNetworks,
+      );
+
       // Check if PayPal SDK is loaded and Apple Pay is available
       if (!window.paypal?.Applepay) {
         addDebugInfo('PayPal Apple Pay is not available');
@@ -139,6 +148,15 @@ const ApplePayButton = () => {
           return;
         }
         addDebugInfo('Apple Pay is eligible: true');
+
+        // Add mobile-specific checks
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        addDebugInfo('Is iOS device: ' + isIOS);
+        addDebugInfo('User Agent: ' + navigator.userAgent);
+        addDebugInfo('Device pixel ratio: ' + window.devicePixelRatio);
+        addDebugInfo(
+          'Screen size: ' + window.screen.width + 'x' + window.screen.height,
+        );
       } catch (error) {
         addDebugInfo('Error checking Apple Pay eligibility: ' + error.message);
         addDebugInfo('Error stack: ' + error.stack);
@@ -152,7 +170,7 @@ const ApplePayButton = () => {
       }
       addDebugInfo('Apple Pay container found');
 
-      // Create Apple Pay button
+      // Create Apple Pay button with mobile-specific styling
       const button = document.createElement('apple-pay-button');
       button.setAttribute('buttonstyle', 'black');
       button.setAttribute('type', 'buy');
@@ -160,10 +178,24 @@ const ApplePayButton = () => {
       button.style.height = '44px';
       button.style.width = '100%';
       button.style.borderRadius = '10px';
+      button.style.webkitAppearance = 'none';
+      button.style.appearance = 'none';
+      button.style.margin = '0';
+      button.style.padding = '0';
+      button.style.border = 'none';
+      button.style.background = 'none';
+      button.style.fontSize = '16px';
+      button.style.fontFamily =
+        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
       // Handle button click
       button.addEventListener('click', () => {
         addDebugInfo('Apple Pay button clicked');
+        addDebugInfo('Device info at click:');
+        addDebugInfo('- User Agent: ' + navigator.userAgent);
+        addDebugInfo('- Platform: ' + navigator.platform);
+        addDebugInfo('- Vendor: ' + navigator.vendor);
+        addDebugInfo('- Language: ' + navigator.language);
 
         const config = applePayConfigRef.current;
         if (!config) {
@@ -318,6 +350,52 @@ const ApplePayButton = () => {
             paymentRequest.total,
             [],
           );
+        };
+
+        // Handle payment authorization
+        session.onpaymentauthorized = async (event) => {
+          updateSessionState('payment_authorized');
+          addDebugInfo(
+            'Payment authorized with: ' + JSON.stringify(event.payment),
+          );
+          try {
+            const applepay = window.paypal.Applepay();
+            const orderDetails = {
+              intent: 'CAPTURE',
+              purchase_units: [
+                {
+                  amount: {
+                    currency_code: 'USD',
+                    value: '10.00',
+                  },
+                },
+              ],
+            };
+
+            addDebugInfo(
+              'Creating order with details: ' + JSON.stringify(orderDetails),
+            );
+
+            // First create an order
+            const order = await window.paypal.Orders.create(orderDetails);
+            addDebugInfo('Order created: ' + JSON.stringify(order));
+
+            // Then confirm the order with Apple Pay
+            await applepay.confirmOrder({
+              orderId: order.id,
+              payment: event.payment,
+            });
+
+            updateSessionState('payment_completed');
+            session.completePayment(window.ApplePaySession.STATUS_SUCCESS);
+            addDebugInfo('Payment successful!');
+          } catch (err) {
+            updateSessionState('payment_failed');
+            addDebugInfo('Payment failed: ' + err.message);
+            addDebugInfo('Error details: ' + JSON.stringify(err));
+            addDebugInfo('Error stack: ' + err.stack);
+            session.completePayment(window.ApplePaySession.STATUS_FAILURE);
+          }
         };
 
         addDebugInfo('Starting Apple Pay session...');
