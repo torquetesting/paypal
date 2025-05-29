@@ -12,7 +12,8 @@ function App() {
     <div>
       <PayPalScriptProvider
         options={{
-          'client-id': process.env.REACT_APP_PAYPAL_CLIENT_ID,
+          'client-id':
+            'AX844i_ZliVK_y_p8UCEb6lqmSc6xfZn9k8UV5_1ep5zSmXnVFO_gG7m9MwhGy97re9a8dOpU7yOxLxy',
           components: 'buttons,card-fields,applepay',
           intent: 'capture',
           currency: 'USD',

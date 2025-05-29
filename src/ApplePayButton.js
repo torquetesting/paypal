@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 3');
+          addDebugInfo('PayPal SDK loaded successfully phase 4');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -103,13 +103,17 @@ const ApplePayButton = () => {
       }
 
       // Check if device can make payments with specific networks
-      const canMakePaymentsWithNetworks =
-        window.ApplePaySession.canMakePaymentsWithActiveCard(
-          'merchant.com.paypal',
+      try {
+        const canMakePaymentsWithNetworks =
+          await window.ApplePaySession.canMakePaymentsWithActiveCard(
+            'merchant.com.paypal',
+          );
+        addDebugInfo(
+          'Can make payments with networks: ' + canMakePaymentsWithNetworks,
         );
-      addDebugInfo(
-        'Can make payments with networks: ' + canMakePaymentsWithNetworks,
-      );
+      } catch (error) {
+        addDebugInfo('Error checking network support: ' + error.message);
+      }
 
       // Check if PayPal SDK is loaded and Apple Pay is available
       if (!window.paypal?.Applepay) {
@@ -208,6 +212,7 @@ const ApplePayButton = () => {
           currencyCode: config.currencyCode,
           supportedNetworks: config.supportedNetworks,
           merchantCapabilities: config.merchantCapabilities,
+          merchantIdentifier: 'merchant.com.paypal', // Add PayPal's merchant identifier
           total: {
             label: 'Demo Product',
             amount: '10.00',
