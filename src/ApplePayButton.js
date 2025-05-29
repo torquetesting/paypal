@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 4');
+          addDebugInfo('PayPal SDK loaded successfully phase 5');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -232,7 +232,7 @@ const ApplePayButton = () => {
           addDebugInfo('Session state updated to: ' + sessionState);
         };
 
-        // Handle payment sheet dismissal
+        // Handle payment sheet dismissal with improved logging
         session.oncancel = (event) => {
           addDebugInfo('Session state at cancellation: ' + sessionState);
           addDebugInfo('Cancellation event details: ' + JSON.stringify(event));
@@ -249,6 +249,14 @@ const ApplePayButton = () => {
           addDebugInfo('- Hostname: ' + window.location.hostname);
           addDebugInfo('- PayPal Client ID: ' + REACT_APP_PAYPAL_CLIENT_ID);
           addDebugInfo('- Apple Pay Session Version: ' + session.version);
+
+          // Check if this was a manual cancellation
+          if (event && event.reason === 'addCard') {
+            addDebugInfo('User is adding a card - this is expected behavior');
+            return;
+          }
+
+          addDebugInfo('Apple Pay session was cancelled by user');
         };
 
         // Add session state change handler
@@ -363,8 +371,13 @@ const ApplePayButton = () => {
           addDebugInfo(
             'Payment authorized with: ' + JSON.stringify(event.payment),
           );
+
           try {
+            // Create a new instance of Applepay for the confirmation
             const applepay = window.paypal.Applepay();
+            addDebugInfo('Created new Applepay instance for confirmation');
+
+            // First create an order
             const orderDetails = {
               intent: 'CAPTURE',
               purchase_units: [
@@ -380,17 +393,21 @@ const ApplePayButton = () => {
             addDebugInfo(
               'Creating order with details: ' + JSON.stringify(orderDetails),
             );
-
-            // First create an order
             const order = await window.paypal.Orders.create(orderDetails);
             addDebugInfo('Order created: ' + JSON.stringify(order));
 
-            // Then confirm the order with Apple Pay
-            await applepay.confirmOrder({
+            // Call confirmOrder with the payment token
+            addDebugInfo('Calling confirmOrder with payment token');
+            const confirmResult = await applepay.confirmOrder({
               orderId: order.id,
               payment: event.payment,
             });
 
+            addDebugInfo(
+              'Order confirmation result: ' + JSON.stringify(confirmResult),
+            );
+
+            // Complete the payment with success status
             updateSessionState('payment_completed');
             session.completePayment(window.ApplePaySession.STATUS_SUCCESS);
             addDebugInfo('Payment successful!');
@@ -399,6 +416,8 @@ const ApplePayButton = () => {
             addDebugInfo('Payment failed: ' + err.message);
             addDebugInfo('Error details: ' + JSON.stringify(err));
             addDebugInfo('Error stack: ' + err.stack);
+
+            // Complete the payment with failure status
             session.completePayment(window.ApplePaySession.STATUS_FAILURE);
           }
         };
