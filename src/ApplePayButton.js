@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 1');
+          addDebugInfo('PayPal SDK loaded successfully phase 2');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -188,14 +188,16 @@ const ApplePayButton = () => {
         );
         const session = new window.ApplePaySession(4, paymentRequest);
 
+        // Track session state
+        let sessionState = 'created';
+        const updateSessionState = (newState) => {
+          sessionState = newState;
+          addDebugInfo('Session state updated to: ' + sessionState);
+        };
+
         // Handle payment sheet dismissal
         session.oncancel = (event) => {
-          // Check if the cancellation was due to card addition
-          if (event && event.reason === 'addCard') {
-            addDebugInfo('User is adding a card - this is expected behavior');
-            return;
-          }
-          addDebugInfo('Apple Pay session cancelled by user');
+          addDebugInfo('Session state at cancellation: ' + sessionState);
           addDebugInfo('Cancellation event details: ' + JSON.stringify(event));
           addDebugInfo('Current session state: ' + session.state);
           addDebugInfo(
@@ -212,8 +214,15 @@ const ApplePayButton = () => {
           addDebugInfo('- Apple Pay Session Version: ' + session.version);
         };
 
+        // Add session state change handler
+        session.onstatechange = (event) => {
+          addDebugInfo('Session state changed: ' + event.state);
+          updateSessionState(event.state);
+        };
+
         // Handle payment sheet errors
         session.onerror = (error) => {
+          addDebugInfo('Session state at error: ' + sessionState);
           addDebugInfo('Apple Pay session error: ' + JSON.stringify(error));
           if (error.code === 'addCard') {
             addDebugInfo('User is adding a card - this is expected behavior');
@@ -224,6 +233,7 @@ const ApplePayButton = () => {
 
         // Validate merchant
         session.onvalidatemerchant = async (event) => {
+          updateSessionState('validating');
           addDebugInfo('Validating merchant with URL: ' + event.validationURL);
           try {
             const currentDomain = window.location.hostname;
@@ -246,7 +256,6 @@ const ApplePayButton = () => {
               domainName: currentDomain,
               environment: 'sandbox',
               clientId: REACT_APP_PAYPAL_CLIENT_ID,
-              // Add additional configuration from the config response
               merchantCountry: applePayConfig.merchantCountry,
               supportedNetworks: applePayConfig.supportedNetworks,
               merchantCapabilities: applePayConfig.merchantCapabilities,
@@ -273,102 +282,20 @@ const ApplePayButton = () => {
               'Merchant validation successful: ' +
                 JSON.stringify(merchantSession),
             );
+            updateSessionState('validated');
             session.completeMerchantValidation(merchantSession);
           } catch (err) {
+            updateSessionState('validation_failed');
             addDebugInfo('Merchant validation failed: ' + err.message);
             addDebugInfo('Error details: ' + JSON.stringify(err));
             addDebugInfo('Error stack: ' + err.stack);
-
-            if (
-              err.message.includes(
-                'APPLE_PAY_MERCHANT_SESSION_VALIDATION_ERROR',
-              )
-            ) {
-              const currentDomain = window.location.hostname;
-              addDebugInfo('Domain validation troubleshooting:');
-              addDebugInfo('1. Current domain: ' + currentDomain);
-              addDebugInfo('2. Protocol: ' + window.location.protocol);
-              addDebugInfo('3. Full URL: ' + window.location.href);
-              addDebugInfo(
-                '4. PayPal Client ID: ' +
-                  (REACT_APP_PAYPAL_CLIENT_ID ? 'Present' : 'Missing'),
-              );
-              addDebugInfo('Please ensure:');
-              addDebugInfo(
-                '- The domain matches exactly (including subdomain)',
-              );
-              addDebugInfo('- You are using HTTPS');
-              addDebugInfo('- The domain is registered in PayPal sandbox');
-              addDebugInfo(
-                '- Your PayPal client ID is correct and has Apple Pay enabled',
-              );
-              addDebugInfo(
-                '- Try removing and re-adding the domain in PayPal sandbox',
-              );
-              addDebugInfo(
-                '- Try creating a new PayPal sandbox app with Apple Pay enabled',
-              );
-
-              // Add specific checks for the current configuration
-              addDebugInfo('Current configuration check:');
-              addDebugInfo('- Environment: sandbox');
-              addDebugInfo('- Domain registered: ' + currentDomain);
-              addDebugInfo(
-                '- Client ID present: ' +
-                  (REACT_APP_PAYPAL_CLIENT_ID ? 'Yes' : 'No'),
-              );
-              addDebugInfo('- Protocol: ' + window.location.protocol);
-            }
-
             session.abort();
           }
         };
 
-        // Handle payment authorization
-        session.onpaymentauthorized = async (event) => {
-          addDebugInfo(
-            'Payment authorized with: ' + JSON.stringify(event.payment),
-          );
-          try {
-            const applepay = window.paypal.Applepay();
-            const orderDetails = {
-              intent: 'CAPTURE',
-              purchase_units: [
-                {
-                  amount: {
-                    currency_code: 'USD',
-                    value: '10.00',
-                  },
-                },
-              ],
-            };
-
-            addDebugInfo(
-              'Creating order with details: ' + JSON.stringify(orderDetails),
-            );
-
-            // First create an order
-            const order = await window.paypal.Orders.create(orderDetails);
-            addDebugInfo('Order created: ' + JSON.stringify(order));
-
-            // Then confirm the order with Apple Pay
-            await applepay.confirmOrder({
-              orderId: order.id,
-              payment: event.payment,
-            });
-
-            session.completePayment(window.ApplePaySession.STATUS_SUCCESS);
-            addDebugInfo('Payment successful!');
-          } catch (err) {
-            addDebugInfo('Payment failed: ' + err.message);
-            addDebugInfo('Error details: ' + JSON.stringify(err));
-            addDebugInfo('Error stack: ' + err.stack);
-            session.completePayment(window.ApplePaySession.STATUS_FAILURE);
-          }
-        };
-
-        // Add support for card addition
+        // Add support for payment method selection
         session.onpaymentmethodselected = (event) => {
+          updateSessionState('payment_method_selected');
           addDebugInfo('Payment method selected: ' + JSON.stringify(event));
           session.completePaymentMethodSelection({
             total: paymentRequest.total,
@@ -383,6 +310,7 @@ const ApplePayButton = () => {
 
         // Add support for shipping contact selection
         session.onshippingcontactselected = (event) => {
+          updateSessionState('shipping_contact_selected');
           addDebugInfo('Shipping contact selected: ' + JSON.stringify(event));
           session.completeShippingContactSelection(
             window.ApplePaySession.STATUS_SUCCESS,
@@ -393,6 +321,7 @@ const ApplePayButton = () => {
         };
 
         addDebugInfo('Starting Apple Pay session...');
+        updateSessionState('starting');
         session.begin();
       });
 
