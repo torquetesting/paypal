@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully');
+          addDebugInfo('PayPal SDK loaded successfully phase 1');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -196,6 +196,20 @@ const ApplePayButton = () => {
             return;
           }
           addDebugInfo('Apple Pay session cancelled by user');
+          addDebugInfo('Cancellation event details: ' + JSON.stringify(event));
+          addDebugInfo('Current session state: ' + session.state);
+          addDebugInfo(
+            'Session validation status: ' +
+              (session.merchantSession ? 'Validated' : 'Not validated'),
+          );
+
+          // Log additional debugging information
+          addDebugInfo('Environment check:');
+          addDebugInfo('- Current URL: ' + window.location.href);
+          addDebugInfo('- Protocol: ' + window.location.protocol);
+          addDebugInfo('- Hostname: ' + window.location.hostname);
+          addDebugInfo('- PayPal Client ID: ' + REACT_APP_PAYPAL_CLIENT_ID);
+          addDebugInfo('- Apple Pay Session Version: ' + session.version);
         };
 
         // Handle payment sheet errors
