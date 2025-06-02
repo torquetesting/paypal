@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 8');
+          addDebugInfo('PayPal SDK loaded successfully phase 9');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -112,14 +112,118 @@ const ApplePayButton = () => {
           'Can make payments with networks: ' + canMakePaymentsWithNetworks,
         );
 
+        // Add detailed environment information
+        addDebugInfo('Environment Details:');
+        addDebugInfo(
+          '- Is Private Browsing: ' +
+            (window.webkit?.messageHandlers?.applepay ? 'No' : 'Yes'),
+        );
+        addDebugInfo(
+          '- Is Sandbox: ' +
+            (window.location.hostname.includes('sandbox') ||
+              window.location.hostname.includes('vercel')),
+        );
+        addDebugInfo(
+          '- Current Environment: ' +
+            (window.location.hostname.includes('sandbox')
+              ? 'Sandbox'
+              : 'Production'),
+        );
+        addDebugInfo(
+          '- Device Type: ' +
+            (navigator.userAgent.includes('iPhone') ? 'iPhone' : 'Mac'),
+        );
+        addDebugInfo(
+          '- Safari Version: ' +
+            (navigator.userAgent.match(/Version\/(\d+\.\d+)/)?.[1] ||
+              'unknown'),
+        );
+
         if (!canMakePaymentsWithNetworks) {
+          addDebugInfo('No active cards found for Apple Pay. Please check:');
           addDebugInfo(
-            'No active cards found for Apple Pay. Please add a card in System Settings > Wallet & Apple Pay',
+            '1. Cards are added in System Settings > Wallet & Apple Pay',
           );
+          addDebugInfo('2. Cards are properly configured in PayPal Sandbox');
+          addDebugInfo('3. You are not in private browsing mode');
+          addDebugInfo('4. Your device supports Apple Pay');
+
+          // Add sandbox-specific instructions
+          if (
+            window.location.hostname.includes('sandbox') ||
+            window.location.hostname.includes('vercel')
+          ) {
+            addDebugInfo('\nSandbox Setup Instructions:');
+            addDebugInfo(
+              '1. Go to PayPal Developer Dashboard > Sandbox > Accounts',
+            );
+            addDebugInfo(
+              '2. Set up Apple Pay in your sandbox business account',
+            );
+            addDebugInfo('3. Add test card: 4242 4242 4242 4242');
+            addDebugInfo("4. Add the card to your Mac's Wallet & Apple Pay");
+            addDebugInfo(
+              '5. Use a regular Safari window (not private browsing)',
+            );
+            addDebugInfo(
+              '6. Make sure the card is set as default in Wallet & Apple Pay',
+            );
+          }
           return;
+        }
+
+        // Check for sandbox-specific requirements
+        if (
+          window.location.hostname.includes('sandbox') ||
+          window.location.hostname.includes('vercel')
+        ) {
+          addDebugInfo(
+            'Running in sandbox environment. Verifying sandbox configuration...',
+          );
+
+          // Check if we're in private browsing
+          if (!window.webkit?.messageHandlers?.applepay) {
+            addDebugInfo(
+              'WARNING: Private browsing mode detected. Apple Pay may not work properly in private browsing.',
+            );
+            addDebugInfo('Please try in a regular Safari window.');
+          }
+
+          // Check if we're on a Mac
+          if (navigator.userAgent.includes('Macintosh')) {
+            addDebugInfo('Testing on Mac. Please ensure:');
+            addDebugInfo(
+              '1. You have added the test card to Wallet & Apple Pay',
+            );
+            addDebugInfo('2. You are using a regular Safari window');
+            addDebugInfo('3. You are logged into your PayPal sandbox account');
+            addDebugInfo(
+              '4. The test card is set as default in Wallet & Apple Pay',
+            );
+            addDebugInfo(
+              '5. The card shows as "Ready to Pay" in Wallet & Apple Pay',
+            );
+          }
+
+          // Verify sandbox configuration
+          addDebugInfo('\nVerifying Sandbox Configuration:');
+          addDebugInfo(
+            '1. Domain registered: ' +
+              (window.location.hostname === 'paypal-nine-omega.vercel.app'
+                ? 'Yes'
+                : 'No'),
+          );
+          addDebugInfo(
+            '2. Environment: ' +
+              (window.location.hostname.includes('sandbox')
+                ? 'Sandbox'
+                : 'Production'),
+          );
+          addDebugInfo('3. Merchant ID: merchant.com.paypal');
         }
       } catch (error) {
         addDebugInfo('Error checking network support: ' + error.message);
+        addDebugInfo('Error details: ' + JSON.stringify(error));
         return;
       }
 
@@ -565,14 +669,23 @@ const ApplePayButton = () => {
             addDebugInfo('Error details: ' + JSON.stringify(err));
             addDebugInfo('Error stack: ' + err.stack);
 
-            // Show a more user-friendly error message
-            if (err.message.includes('domain')) {
+            // Add sandbox-specific error messages
+            if (
+              window.location.hostname.includes('sandbox') ||
+              window.location.hostname.includes('vercel')
+            ) {
+              addDebugInfo('Sandbox Environment Check:');
               addDebugInfo(
-                'Domain validation failed. Please ensure your domain is properly registered with PayPal.',
+                '1. Verify your PayPal sandbox account is properly configured for Apple Pay',
               );
-            } else if (err.message.includes('merchant')) {
               addDebugInfo(
-                'Merchant validation failed. Please check your PayPal merchant account settings.',
+                '2. Ensure your test cards are properly set up in the sandbox environment',
+              );
+              addDebugInfo(
+                '3. Check that you are not in private browsing mode',
+              );
+              addDebugInfo(
+                '4. Verify your domain is properly registered in the sandbox environment',
               );
             }
 
