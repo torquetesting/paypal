@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 7');
+          addDebugInfo('PayPal SDK loaded successfully phase 8');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -240,7 +240,171 @@ const ApplePayButton = () => {
           addDebugInfo('Session state updated to: ' + sessionState);
         };
 
-        // Handle payment sheet dismissal with improved logging
+        // Handle payment authorization
+        session.onpaymentauthorized = async (event) => {
+          updateSessionState('payment_authorized');
+          addDebugInfo('Payment authorization started');
+          addDebugInfo('Payment details: ' + JSON.stringify(event.payment));
+
+          try {
+            // Create a new instance of Applepay for the confirmation
+            const applepay = window.paypal.Applepay();
+            addDebugInfo('Created new Applepay instance for confirmation');
+
+            // First create an order
+            const orderDetails = {
+              intent: 'CAPTURE',
+              purchase_units: [
+                {
+                  amount: {
+                    currency_code: 'USD',
+                    value: '10.00',
+                  },
+                  description: 'Demo Product',
+                  custom_id: 'DEMO_PRODUCT_001',
+                },
+              ],
+              application_context: {
+                brand_name: 'Your Store Name',
+                landing_page: 'NO_PREFERENCE',
+                user_action: 'PAY_NOW',
+                return_url: window.location.href,
+                cancel_url: window.location.href,
+              },
+            };
+
+            addDebugInfo(
+              'Creating order with details: ' + JSON.stringify(orderDetails),
+            );
+
+            // Create the order with error handling
+            let order;
+            try {
+              order = await window.paypal.Orders.create(orderDetails);
+              addDebugInfo(
+                'Order created successfully: ' + JSON.stringify(order),
+              );
+            } catch (orderError) {
+              addDebugInfo('Error creating order: ' + orderError.message);
+              addDebugInfo(
+                'Order error details: ' + JSON.stringify(orderError),
+              );
+              throw orderError;
+            }
+
+            // Call confirmOrder with the payment token
+            addDebugInfo('Calling confirmOrder with payment token');
+            addDebugInfo(
+              'Payment token: ' + JSON.stringify(event.payment.token),
+            );
+
+            let confirmResult;
+            try {
+              confirmResult = await applepay.confirmOrder({
+                orderId: order.id,
+                payment: event.payment,
+              });
+              addDebugInfo(
+                'Order confirmation result: ' + JSON.stringify(confirmResult),
+              );
+            } catch (confirmError) {
+              addDebugInfo('Error confirming order: ' + confirmError.message);
+              addDebugInfo(
+                'Confirmation error details: ' + JSON.stringify(confirmError),
+              );
+              throw confirmError;
+            }
+
+            // Complete the payment with success status
+            updateSessionState('payment_completed');
+            session.completePayment(window.ApplePaySession.STATUS_SUCCESS);
+            addDebugInfo('Payment successful!');
+          } catch (err) {
+            updateSessionState('payment_failed');
+            addDebugInfo('Payment failed: ' + err.message);
+            addDebugInfo('Error details: ' + JSON.stringify(err));
+            addDebugInfo('Error stack: ' + err.stack);
+
+            // Log specific error types
+            if (err.name === 'OrderError') {
+              addDebugInfo(
+                'Order creation failed. Check PayPal sandbox account settings.',
+              );
+            } else if (err.name === 'ConfirmError') {
+              addDebugInfo(
+                'Order confirmation failed. Check payment token and merchant configuration.',
+              );
+            }
+
+            // Complete the payment with failure status
+            session.completePayment(window.ApplePaySession.STATUS_FAILURE);
+          }
+        };
+
+        // Add support for payment method selection with error handling
+        session.onpaymentmethodselected = (event) => {
+          updateSessionState('payment_method_selected');
+          addDebugInfo('Payment method selected: ' + JSON.stringify(event));
+
+          try {
+            session.completePaymentMethodSelection({
+              total: paymentRequest.total,
+              lineItems: [
+                {
+                  label: 'Demo Product',
+                  amount: '10.00',
+                },
+              ],
+            });
+            addDebugInfo('Payment method selection completed successfully');
+          } catch (error) {
+            addDebugInfo(
+              'Error completing payment method selection: ' + error.message,
+            );
+            session.abort();
+          }
+        };
+
+        // Add support for shipping contact selection
+        session.onshippingcontactselected = (event) => {
+          updateSessionState('shipping_contact_selected');
+          addDebugInfo('Shipping contact selected: ' + JSON.stringify(event));
+          try {
+            session.completeShippingContactSelection(
+              window.ApplePaySession.STATUS_SUCCESS,
+              [],
+              paymentRequest.total,
+              [],
+            );
+            addDebugInfo('Shipping contact selection completed successfully');
+          } catch (error) {
+            addDebugInfo(
+              'Error completing shipping contact selection: ' + error.message,
+            );
+            session.abort();
+          }
+        };
+
+        // Add support for shipping method selection
+        session.onshippingmethodselected = (event) => {
+          updateSessionState('shipping_method_selected');
+          addDebugInfo('Shipping method selected: ' + JSON.stringify(event));
+          try {
+            session.completeShippingMethodSelection(
+              window.ApplePaySession.STATUS_SUCCESS,
+              paymentRequest.total,
+              [],
+            );
+            addDebugInfo('Shipping method selection completed successfully');
+          } catch (error) {
+            addDebugInfo(
+              'Error completing shipping method selection: ' + error.message,
+            );
+            session.abort();
+          }
+        };
+
+        // Add support for payment sheet dismissal
         session.oncancel = (event) => {
           addDebugInfo('Session state at cancellation: ' + sessionState);
           addDebugInfo('Cancellation event details: ' + JSON.stringify(event));
@@ -272,6 +436,7 @@ const ApplePayButton = () => {
             addDebugInfo('1. User manually cancelled the payment sheet');
             addDebugInfo('2. Payment sheet failed to display properly');
             addDebugInfo('3. Device compatibility issue');
+            addDebugInfo('4. Payment authorization failed');
           }
 
           addDebugInfo('Apple Pay session was cancelled by user');
@@ -413,143 +578,6 @@ const ApplePayButton = () => {
 
             session.abort();
           }
-        };
-
-        // Handle payment authorization
-        session.onpaymentauthorized = async (event) => {
-          updateSessionState('payment_authorized');
-          addDebugInfo('Payment authorization started');
-          addDebugInfo('Payment details: ' + JSON.stringify(event.payment));
-
-          try {
-            // Create a new instance of Applepay for the confirmation
-            const applepay = window.paypal.Applepay();
-            addDebugInfo('Created new Applepay instance for confirmation');
-
-            // First create an order
-            const orderDetails = {
-              intent: 'CAPTURE',
-              purchase_units: [
-                {
-                  amount: {
-                    currency_code: 'USD',
-                    value: '10.00',
-                  },
-                  description: 'Demo Product',
-                  custom_id: 'DEMO_PRODUCT_001',
-                },
-              ],
-              application_context: {
-                brand_name: 'Your Store Name',
-                landing_page: 'NO_PREFERENCE',
-                user_action: 'PAY_NOW',
-                return_url: window.location.href,
-                cancel_url: window.location.href,
-              },
-            };
-
-            addDebugInfo(
-              'Creating order with details: ' + JSON.stringify(orderDetails),
-            );
-
-            // Create the order with error handling
-            let order;
-            try {
-              order = await window.paypal.Orders.create(orderDetails);
-              addDebugInfo(
-                'Order created successfully: ' + JSON.stringify(order),
-              );
-            } catch (orderError) {
-              addDebugInfo('Error creating order: ' + orderError.message);
-              addDebugInfo(
-                'Order error details: ' + JSON.stringify(orderError),
-              );
-              throw orderError;
-            }
-
-            // Call confirmOrder with the payment token
-            addDebugInfo('Calling confirmOrder with payment token');
-            addDebugInfo(
-              'Payment token: ' + JSON.stringify(event.payment.token),
-            );
-
-            let confirmResult;
-            try {
-              confirmResult = await applepay.confirmOrder({
-                orderId: order.id,
-                payment: event.payment,
-              });
-              addDebugInfo(
-                'Order confirmation result: ' + JSON.stringify(confirmResult),
-              );
-            } catch (confirmError) {
-              addDebugInfo('Error confirming order: ' + confirmError.message);
-              addDebugInfo(
-                'Confirmation error details: ' + JSON.stringify(confirmError),
-              );
-              throw confirmError;
-            }
-
-            // Complete the payment with success status
-            updateSessionState('payment_completed');
-            session.completePayment(window.ApplePaySession.STATUS_SUCCESS);
-            addDebugInfo('Payment successful!');
-          } catch (err) {
-            updateSessionState('payment_failed');
-            addDebugInfo('Payment failed: ' + err.message);
-            addDebugInfo('Error details: ' + JSON.stringify(err));
-            addDebugInfo('Error stack: ' + err.stack);
-
-            // Log specific error types
-            if (err.name === 'OrderError') {
-              addDebugInfo(
-                'Order creation failed. Check PayPal sandbox account settings.',
-              );
-            } else if (err.name === 'ConfirmError') {
-              addDebugInfo(
-                'Order confirmation failed. Check payment token and merchant configuration.',
-              );
-            }
-
-            // Complete the payment with failure status
-            session.completePayment(window.ApplePaySession.STATUS_FAILURE);
-          }
-        };
-
-        // Add support for payment method selection with error handling
-        session.onpaymentmethodselected = (event) => {
-          updateSessionState('payment_method_selected');
-          addDebugInfo('Payment method selected: ' + JSON.stringify(event));
-
-          try {
-            session.completePaymentMethodSelection({
-              total: paymentRequest.total,
-              lineItems: [
-                {
-                  label: 'Demo Product',
-                  amount: '10.00',
-                },
-              ],
-            });
-            addDebugInfo('Payment method selection completed successfully');
-          } catch (error) {
-            addDebugInfo(
-              'Error completing payment method selection: ' + error.message,
-            );
-            session.abort();
-          }
-        };
-
-        // Add support for shipping contact selection
-        session.onshippingcontactselected = (event) => {
-          updateSessionState('shipping_contact_selected');
-          addDebugInfo('Shipping contact selected: ' + JSON.stringify(event));
-          session.completeShippingContactSelection(
-            window.ApplePaySession.STATUS_SUCCESS,
-            [],
-            paymentRequest.total,
-            [],
-          );
         };
 
         addDebugInfo('Starting Apple Pay session...');
