@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 5');
+          addDebugInfo('PayPal SDK loaded successfully phase 6');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -111,8 +111,16 @@ const ApplePayButton = () => {
         addDebugInfo(
           'Can make payments with networks: ' + canMakePaymentsWithNetworks,
         );
+
+        if (!canMakePaymentsWithNetworks) {
+          addDebugInfo(
+            'No active cards found for Apple Pay. Please add a card in System Settings > Wallet & Apple Pay',
+          );
+          return;
+        }
       } catch (error) {
         addDebugInfo('Error checking network support: ' + error.message);
+        return;
       }
 
       // Check if PayPal SDK is loaded and Apple Pay is available
@@ -334,6 +342,18 @@ const ApplePayButton = () => {
             addDebugInfo('Merchant validation failed: ' + err.message);
             addDebugInfo('Error details: ' + JSON.stringify(err));
             addDebugInfo('Error stack: ' + err.stack);
+
+            // Show a more user-friendly error message
+            if (err.message.includes('domain')) {
+              addDebugInfo(
+                'Domain validation failed. Please ensure your domain is properly registered with PayPal.',
+              );
+            } else if (err.message.includes('merchant')) {
+              addDebugInfo(
+                'Merchant validation failed. Please check your PayPal merchant account settings.',
+              );
+            }
+
             session.abort();
           }
         };
