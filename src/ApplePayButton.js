@@ -29,31 +29,56 @@ const ApplePayButton = () => {
             (clientId ? clientId.substring(0, 5) + '...' : 'Not found'),
         );
 
-        // Updated PayPal SDK URL with all necessary components and debug mode
-        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay,orders&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
+        // Updated PayPal SDK URL with a single request configuration
+        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 12');
+          addDebugInfo('PayPal SDK loaded successfully phase 13');
           setTimeout(() => {
-            if (window.paypal?.Applepay) {
-              addDebugInfo('PayPal Apple Pay component is available');
+            if (window.paypal) {
+              addDebugInfo('PayPal SDK loaded successfully');
               addDebugInfo('PayPal SDK version: ' + window.paypal.version);
-              resolve();
+              addDebugInfo(
+                'Available components: ' +
+                  Object.keys(window.paypal).join(', '),
+              );
+
+              if (window.paypal?.Applepay) {
+                addDebugInfo('PayPal Apple Pay component is available');
+                resolve();
+              } else {
+                addDebugInfo('PayPal Apple Pay component is not available');
+                addDebugInfo('Checking PayPal configuration...');
+
+                // Try to initialize Apple Pay directly
+                try {
+                  const applepay = window.paypal.Applepay();
+                  addDebugInfo('Successfully created Apple Pay instance');
+                  resolve();
+                } catch (error) {
+                  addDebugInfo(
+                    'Error creating Apple Pay instance: ' + error.message,
+                  );
+                  reject(error);
+                }
+              }
             } else {
-              addDebugInfo(
-                'PayPal Apple Pay component is not available after loading',
-              );
-              addDebugInfo(
-                'Available PayPal components: ' +
-                  Object.keys(window.paypal || {}).join(', '),
-              );
-              reject(new Error('PayPal Apple Pay component not available'));
+              addDebugInfo('PayPal SDK not available after loading');
+              reject(new Error('PayPal SDK not available'));
             }
           }, 2000);
         };
         script.onerror = (error) => {
-          addDebugInfo('Error loading PayPal SDK: ' + error.message);
-          reject(error);
+          addDebugInfo(
+            'Error loading PayPal SDK: ' + (error?.message || 'Unknown error'),
+          );
+          addDebugInfo('Error details: ' + JSON.stringify(error));
+          addDebugInfo('Script src: ' + script.src);
+          addDebugInfo(
+            'Network status: ' + navigator.onLine ? 'Online' : 'Offline',
+          );
+          addDebugInfo('Browser info: ' + navigator.userAgent);
+          reject(error || new Error('Failed to load PayPal SDK'));
         };
         document.body.appendChild(script);
       });
