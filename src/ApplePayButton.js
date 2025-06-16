@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 9');
+          addDebugInfo('PayPal SDK loaded successfully phase 10');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -647,16 +647,17 @@ const ApplePayButton = () => {
             );
 
             // Try to validate the merchant
-            const merchantSession = await applepay.validateMerchant(
+            const merchantValidationResponse = await applepay.validateMerchant(
               validationConfig,
             );
 
-            if (!merchantSession) {
+            if (!merchantValidationResponse?.merchantSession) {
               throw new Error(
                 'Merchant session validation returned empty response',
               );
             }
 
+            const merchantSession = merchantValidationResponse.merchantSession;
             addDebugInfo(
               'Merchant validation successful: ' +
                 JSON.stringify(merchantSession),
