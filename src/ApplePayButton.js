@@ -30,10 +30,10 @@ const ApplePayButton = () => {
         );
 
         // Updated PayPal SDK URL with all necessary components and debug mode
-        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
+        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay,orders&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 11');
+          addDebugInfo('PayPal SDK loaded successfully phase 12');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
