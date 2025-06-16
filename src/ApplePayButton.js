@@ -3,11 +3,28 @@ import React, { useEffect, useState, useRef } from 'react';
 const ApplePayButton = () => {
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [debugInfo, setDebugInfo] = useState('');
+  const [error, setError] = useState(null);
   const applePayConfigRef = useRef(null);
 
   const addDebugInfo = (message) => {
-    console.log(message);
-    setDebugInfo((prev) => prev + '\n' + message);
+    try {
+      console.log(message);
+      setDebugInfo((prev) => prev + '\n' + message);
+    } catch (err) {
+      console.error('Error adding debug info:', err);
+    }
+  };
+
+  const handleError = (error) => {
+    try {
+      const errorMessage = error?.message || 'Unknown error';
+      const errorDetails = error?.toString() || JSON.stringify(error);
+      addDebugInfo('Error: ' + errorMessage);
+      addDebugInfo('Error details: ' + errorDetails);
+      setError(error);
+    } catch (err) {
+      console.error('Error handling error:', err);
+    }
   };
 
   const REACT_APP_PAYPAL_CLIENT_ID =
@@ -47,73 +64,95 @@ const ApplePayButton = () => {
   };
 
   useEffect(() => {
-    // Load PayPal SDK first
+    let mounted = true;
+
     const loadPayPalSDK = () => {
+      if (!mounted) return Promise.reject(new Error('Component unmounted'));
+
       if (document.querySelector('script[src*="paypal-sdk"]')) {
         addDebugInfo('PayPal SDK already loaded');
         return Promise.resolve();
       }
 
       return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        const clientId = REACT_APP_PAYPAL_CLIENT_ID;
-        addDebugInfo(
-          'Using PayPal Client ID: ' +
-            (clientId ? clientId.substring(0, 5) + '...' : 'Not found'),
-        );
+        try {
+          const script = document.createElement('script');
+          const clientId = REACT_APP_PAYPAL_CLIENT_ID;
+          addDebugInfo(
+            'Using PayPal Client ID: ' +
+              (clientId ? clientId.substring(0, 5) + '...' : 'Not found'),
+          );
 
-        // Updated PayPal SDK URL with a single request configuration
-        script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
-        script.async = true;
-        script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 14');
-          setTimeout(() => {
-            if (window.paypal) {
-              addDebugInfo('PayPal SDK loaded successfully');
-              addDebugInfo('PayPal SDK version: ' + window.paypal.version);
-              addDebugInfo(
-                'Available components: ' +
-                  Object.keys(window.paypal).join(', '),
-              );
-
-              if (window.paypal?.Applepay) {
-                addDebugInfo('PayPal Apple Pay component is available');
-                resolve();
-              } else {
-                addDebugInfo('PayPal Apple Pay component is not available');
-                addDebugInfo('Checking PayPal configuration...');
-
-                // Try to initialize Apple Pay directly
-                try {
-                  const applepay = window.paypal.Applepay();
-                  addDebugInfo('Successfully created Apple Pay instance');
-                  resolve();
-                } catch (error) {
-                  addDebugInfo(
-                    'Error creating Apple Pay instance: ' + error.message,
-                  );
-                  reject(error);
-                }
-              }
-            } else {
-              addDebugInfo('PayPal SDK not available after loading');
-              reject(new Error('PayPal SDK not available'));
+          // Updated PayPal SDK URL with basic configuration
+          script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons&currency=USD&intent=capture&debug=true`;
+          script.async = true;
+          script.onload = () => {
+            if (!mounted) {
+              reject(new Error('Component unmounted'));
+              return;
             }
-          }, 2000);
-        };
-        script.onerror = (error) => {
-          addDebugInfo(
-            'Error loading PayPal SDK: ' + (error?.message || 'Unknown error'),
-          );
-          addDebugInfo('Error details: ' + JSON.stringify(error));
-          addDebugInfo('Script src: ' + script.src);
-          addDebugInfo(
-            'Network status: ' + navigator.onLine ? 'Online' : 'Offline',
-          );
-          addDebugInfo('Browser info: ' + navigator.userAgent);
-          reject(error || new Error('Failed to load PayPal SDK'));
-        };
-        document.body.appendChild(script);
+            addDebugInfo('PayPal SDK loaded successfully phase 15');
+            setTimeout(() => {
+              if (!mounted) {
+                reject(new Error('Component unmounted'));
+                return;
+              }
+              if (window.paypal) {
+                addDebugInfo('PayPal SDK core loaded successfully');
+                addDebugInfo('PayPal SDK version: ' + window.paypal.version);
+
+                // Load Apple Pay component
+                const applePayScript = document.createElement('script');
+                applePayScript.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
+                applePayScript.async = true;
+                applePayScript.onload = () => {
+                  if (!mounted) {
+                    reject(new Error('Component unmounted'));
+                    return;
+                  }
+                  addDebugInfo('Apple Pay component loaded');
+                  if (window.paypal?.Applepay) {
+                    addDebugInfo('PayPal Apple Pay component is available');
+                    resolve();
+                  } else {
+                    const error = new Error(
+                      'PayPal Apple Pay component not available',
+                    );
+                    handleError(error);
+                    reject(error);
+                  }
+                };
+                applePayScript.onerror = (error) => {
+                  if (!mounted) {
+                    reject(new Error('Component unmounted'));
+                    return;
+                  }
+                  handleError(error);
+                  reject(
+                    error || new Error('Failed to load Apple Pay component'),
+                  );
+                };
+                document.body.appendChild(applePayScript);
+              } else {
+                const error = new Error('PayPal SDK core not available');
+                handleError(error);
+                reject(error);
+              }
+            }, 2000);
+          };
+          script.onerror = (error) => {
+            if (!mounted) {
+              reject(new Error('Component unmounted'));
+              return;
+            }
+            handleError(error);
+            reject(error || new Error('Failed to load PayPal SDK'));
+          };
+          document.body.appendChild(script);
+        } catch (err) {
+          handleError(err);
+          reject(err);
+        }
       });
     };
 
@@ -442,17 +481,23 @@ const ApplePayButton = () => {
             // Create order with error handling
             let order;
             try {
-              const accessToken = await getPayPalAccessToken();
+              // Create order using fetch API
               const orderResponse = await fetch(
                 'https://api-m.sandbox.paypal.com/v2/checkout/orders',
                 {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${accessToken}`,
+                    Authorization: `Bearer ${REACT_APP_PAYPAL_CLIENT_ID}`,
                     'PayPal-Request-Id': Date.now().toString(),
                   },
-                  body: JSON.stringify(orderDetails),
+                  body: JSON.stringify({
+                    ...orderDetails,
+                    application_context: {
+                      ...orderDetails.application_context,
+                      shipping_preference: 'NO_SHIPPING',
+                    },
+                  }),
                 },
               );
 
@@ -795,16 +840,31 @@ const ApplePayButton = () => {
       try {
         await loadPayPalSDK();
         await loadApplePaySDK();
-        setIsSDKLoaded(true);
-        await initializeApplePay();
-      } catch (error) {
-        addDebugInfo('Initialization error: ' + error.message);
-        addDebugInfo('Error stack: ' + error.stack);
+        if (mounted) {
+          setIsSDKLoaded(true);
+          await initializeApplePay();
+        }
+      } catch (err) {
+        handleError(err);
       }
     };
 
     initialize();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
+
+  if (error) {
+    return (
+      <div style={{ color: 'red', padding: '20px' }}>
+        <h3>Error loading Apple Pay</h3>
+        <p>{error.message}</p>
+        <pre style={{ whiteSpace: 'pre-wrap' }}>{debugInfo}</pre>
+      </div>
+    );
+  }
 
   return (
     <div
