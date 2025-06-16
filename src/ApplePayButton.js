@@ -33,7 +33,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 10');
+          addDebugInfo('PayPal SDK loaded successfully phase 11');
           setTimeout(() => {
             if (window.paypal?.Applepay) {
               addDebugInfo('PayPal Apple Pay component is available');
@@ -452,11 +452,16 @@ const ApplePayButton = () => {
 
           try {
             session.completePaymentMethodSelection({
-              total: paymentRequest.total,
-              lineItems: [
+              newTotal: {
+                label: 'Demo Product',
+                amount: '10.00',
+                type: 'final',
+              },
+              newLineItems: [
                 {
                   label: 'Demo Product',
                   amount: '10.00',
+                  type: 'final',
                 },
               ],
             });
