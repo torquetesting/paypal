@@ -12,6 +12,39 @@ const ApplePayButton = () => {
 
   const REACT_APP_PAYPAL_CLIENT_ID =
     'AX844i_ZliVK_y_p8UCEb6lqmSc6xfZn9k8UV5_1ep5zSmXnVFO_gG7m9MwhGy97re9a8dOpU7yOxLxy';
+  const REACT_APP_PAYPAL_CLIENT_SECRET = 'YOUR_CLIENT_SECRET'; // You'll need to add this
+
+  const getPayPalAccessToken = async () => {
+    try {
+      const response = await fetch(
+        'https://api-m.sandbox.paypal.com/v1/oauth2/token',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization:
+              'Basic ' +
+              btoa(
+                REACT_APP_PAYPAL_CLIENT_ID +
+                  ':' +
+                  REACT_APP_PAYPAL_CLIENT_SECRET,
+              ),
+          },
+          body: 'grant_type=client_credentials',
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to get access token');
+      }
+
+      const data = await response.json();
+      return data.access_token;
+    } catch (error) {
+      addDebugInfo('Error getting PayPal access token: ' + error.message);
+      throw error;
+    }
+  };
 
   useEffect(() => {
     // Load PayPal SDK first
@@ -33,7 +66,7 @@ const ApplePayButton = () => {
         script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&components=buttons,applepay&currency=USD&intent=capture&enable-funding=applepay&debug=true`;
         script.async = true;
         script.onload = () => {
-          addDebugInfo('PayPal SDK loaded successfully phase 13');
+          addDebugInfo('PayPal SDK loaded successfully phase 14');
           setTimeout(() => {
             if (window.paypal) {
               addDebugInfo('PayPal SDK loaded successfully');
@@ -406,10 +439,31 @@ const ApplePayButton = () => {
               'Creating order with details: ' + JSON.stringify(orderDetails),
             );
 
-            // Create the order with error handling
+            // Create order with error handling
             let order;
             try {
-              order = await window.paypal.Orders.create(orderDetails);
+              const accessToken = await getPayPalAccessToken();
+              const orderResponse = await fetch(
+                'https://api-m.sandbox.paypal.com/v2/checkout/orders',
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                    'PayPal-Request-Id': Date.now().toString(),
+                  },
+                  body: JSON.stringify(orderDetails),
+                },
+              );
+
+              if (!orderResponse.ok) {
+                const errorData = await orderResponse.json();
+                throw new Error(
+                  `Order creation failed: ${JSON.stringify(errorData)}`,
+                );
+              }
+
+              order = await orderResponse.json();
               addDebugInfo(
                 'Order created successfully: ' + JSON.stringify(order),
               );
